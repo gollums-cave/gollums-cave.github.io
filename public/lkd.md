@@ -1,0 +1,328 @@
+### Process
+  - process descriptor
+    - thread_info
+      - task_struct
+        - pid
+        - state
+    - max limit of processes
+    - current_thread_info()->task;
+    - process states
+      - task_running
+      - task_interruptible
+      - task_uninterruptible
+      - task_tracked
+      - task_stopped
+    - processor context
+    - process tree
+      - parent
+      - children
+  - process creation
+    - fork()
+      - create child process as copy with different pid
+      - ppid is pid of original process
+    - exec()
+      - execute new executable
+    - copy on write 
+      - fork() only has to duplicate parent's page tables
+    - fork() internals
+      - dup_task_struct()
+      - task_uninterruptible (not runnable yet)
+      - alloc_pid()
+      - copy_process()
+    - vfork()
+      - = fork(), except parent page table entries are not copied
+      - why do we need vfork() ???
+  - Threads
+    - multiple threads of execution of the same program in a shared memory address space
+    - can share open files and other resources
+    - enables concurrency and parallelism (in multi-core systems)
+    - linux implemntation
+      - no concept of thread. thread = standard process
+      - thread is a merely process that shares certain resources with other processes
+    - creation
+      - call clone() with flags to share e.g.
+        - address space  
+        - file system resources
+        - file descriptors
+        - signal handlers
+      - how does a user program create a new thread vs a new process ??? 
+    - kernel threads
+      - processes in kernel space for kernel operations
+      - no address space
+  - Process Termination
+    - kernel releases process resources
+    - notifies parent of child's demise
+    - self destruction via exit()
+    - do_exit() cleans up resources
+    - process in zombie state
+    - wait()
+    - repareint
+      - if parent exits before children, children are reparented to process in same thread group or init process
+
+### Process Scheduling
+- given a set of runnable processes, which process to run next
+- Multitasking
+  - simulataneously interleave execution of multiple processes
+  - many processes may be in block or sleep state
+    - waiting for something (keyboard input, network data etc)
+  - preemptive multitasking ( Linux )
+    - scheduler decides when to start/stop processes
+    - timeslices of processor time given to processes
+  - cooperative multitasking
+    - process runs until it voluntarily yields
+- Scheduler
+  - O(1) scheduler good for non-interactive server workloads, but not for interactive desktop work
+  - Complety Fair Scheduler
+- Policy
+  - i/o bound vs cpu bound processes
+    - i/o = much of time spent in submitting and waiting on I/O
+      - runnable only for short duration, blocked most of the time
+    - cpu bound = most of the time executing code
+    - processes can be a mix of both
+  - conflicting goals
+    - low latency = fast response time
+    - high througput = max system utilization
+  - process priority
+    - priority based scheduling 
+    - nice value (-20 to 19; 0 default)
+      - lower value = higher priority
+    - real time priority (0 to 99)
+      - higher value = higher priority
+      - real time process ???
+  - timeslice
+    - how long a task can run until it is preempted
+    - too long - poor interactivity 
+    - too short - context switching overhead
+    - i/o bound prefer shorter but more frequent
+    - cpu bound prefer longer
+    - in linux CFS, timeslice is a proportion of processor time
+      - function of system load and nice value
+      - newly runnable process "has consumed a smaller proportion of the processor than the currently executing process, it runs immediately, preempting the current process"
+  - example : text editor (i/o) and video encoder (cpu)
+    - if both are at the same nice level, both are allocated 50% of processor time
+    - text editor being mostly blocked on I/O does not use up its share
+    - thus when text editor wakes up, it is allotted immediately
+    - how often does the scheduler make these decisions ??? after timeslice interval ???
+- Scheduling Algorithm
+  - modular scheduler classes - can implement different scheduling algorithms
+  - CFS for normal processes
+  - Scheduling challenges
+    - 2 processes : default 100ms timeslice & lower 5ms (20 nice value). 
+      - context switching issues (e.g. 2 lower priority processes)
+      - default might be i/o, but will get higher timeslice, that cpu bound lower priority process
+    - nice value to timeslice mapping
+      - 18/19 = 10ms/5ms
+    - difficulty choosing absolute timeslice (timer tick dependency issues)
+    - how to boost priority of interactive tasks immediately after woken up
+    - linux solution = assign each process a proportion of the processor instead of a timeslice
+  - Fair scheduling
+    - n processes would receive 1/n processor time
+    - "CFS will run each process for some amount of time, round-robin, selecting next the process that has run the least. Rather than assign each process a timeslice, CFS calculates how long a process should run as a function of the total number of runnable processes. Instead of using the nice value to calculate a timeslice, CFS uses the nice value to weight the propor- tion of processor a process is to receive: Higher valued (lower priority) processes receive a fractional weight relative to the default nice value, whereas lower valued (higher priority) processes receive a larger weight." 
+    - minimum granularity = default 1ms
+    - if a process A has spawned 100 threads, vs process B which has spawned just 1 thread, how is fairness maintained ???
+Scheduling Implemtation
+  - Time accounting
+    - schedulers must account for a process's time  
+      - other unix systems : each tick, scheduler decrements time from the timeslice
+    - CFS task_struct.se = sched_entity 
+      - vruntime =   
+        - "actual runtime (the amount of time spent running) normalized (or weighted) by the number of runnable processes"
+        - "used to help us approximate the “ideal multitasking processor” that CFS is modeling"
+        - update_curr()
+          - updates vruntime
+          - invoked periodically by the system timer
+          - and when process becomes runnable or blocked
+  - Process Selection
+    - pick the process with the smallest vruntime  
+      - red black tree to manage list of runnable processes
+      - pick leftmost node
+      - when process is created or becomes runnable it is added to the tree and leftmost node is cached
+      - when process is blocked (unrunnable) or terminates, remove from tree
+  - Scheduler entry point
+    - is the scheduler run in a kernel thread?
+  - Sleeping and waking up
+    - Sleeping tasks are in nonrunnable state. They are waiting for some event to happen
+    - "The task marks itself as sleeping, puts itself on a wait queue, removes itself from the red-black tree of runnable, and calls schedule() to select a new process to execute.Waking back up is the inverse:The task is set as runnable, removed from the wait queue, and added back to the red-black tree."
+    - Wait queues
+      - list of sleeping tasks (wait_queue_head_t)
+      - how does an event just wake up specific tasks in the wait queue that are waiting for it ???
+  
+- Premption and Context Switching
+  - context switching
+    - switch from one runnable task to another
+    - 2 main jobs
+      - switch_mm - switch virtual memory mapping
+      - switch_to - switch processor state
+  - premption can depend on the need_resched flag
+  - User premption can occur
+    - when returning to user-space from system call
+    - when returning to user-space from interuppt handler
+  - Linux kernel premptible as long as it is not holding a lock
+
+- Real time scheduling policies
+  - SCHED_FIFO & SCHED_RR
+  - SCHED_FIFO 
+    - no timeslice and can run indefinitely
+    - prioritized over SCHED_NORMAL
+  - SCHED_RR = fifo with pre-determined timeslices
+  - when are real time processes used ???
+
+### System Calls 
+- mechanism for user space processes to interact with the system
+- interface b/w user space & hardware
+  - abstracted h/w interface
+  - system security and stability
+  - provide a virtualized system to processes
+- user space calls API (POSIX), which then makes the system call
+- syscalls have a number; user space process invokes syscall by this number
+- System call handler
+  - how to invoke a syscall?
+    - cannot directly make a function call ; systcall needs to be executed in kernel space 
+    - instead invoked via a software interuppt
+      - write syscall number into eax register
+      - write parameters to other registers
+      - cause an exception
+      - system switches to kernel mode
+      - and executes exception handler
+- System call implementation
+  - must verify the parameters passed
+  - kernel code must never follow a pointer into user space
+    - copy_to_user()
+    - copy_from_user()
+  - must check user process capabilities 
+- System call context
+  - accessing system call from user-space
+
+### Kernel Data Structures
+- Linked Lists
+  - single
+  - double
+  - ciccular
+  - special kind of implementation in whic a data node has a list_head as a member
+- Queues
+  - useful for producer/consumer logic
+- Maps (associative arrays)
+  - add, remove, lookup
+  - allocate; generates UID as well
+- Binary Trees
+  - BST
+  - Self balancing BST
+  - Red black tree
+
+### Interrupts and Interrupt Handlers
+- Motivation
+  - managing h/w is one of core os duties
+  - kernel faster than h/w; so can't wait for h/w
+    - polling is a way; but incurs overhead
+    - better soln is for h/w to signal kernel it needs attention; interuppt
+- Interrupt
+  - "the key-board controller (the hardware device that manages the keyboard) issues an electrical sig- nal to the processor to alert the operating system to newly available key presses.These electrical signals are interrupts.The processor receives the interrupt and signals the oper- ating system to enable the operating system to respond to the new data. Hardware devices generate interrupts asynchronously with respect to the processor clock—they can occur at any time. Consequently, the kernel can be interrupted at any time to process interrupts."
+  - h/w - signal -> interrupt controller input pin -> processor signal -> notifies os
+  - different devices; different interrupts - unique value
+  - IRQ (interrupt request lines)
+    - 0 = timer
+    - 1 = keyboard
+    - interrupt values could be dynamically assigned as well
+- Exceptions
+  - not same as interrupts, but similar
+  - synchronized with processor clock
+  - kernel code for handling exceptions is similar to handling h/w interrupts
+  - system calls are implemented via software interrupts 
+- Interrupt Handler
+  - fn that kernel runs in response to specific interrupt is called an interrupt handler
+  - each device generates different interrupts
+  - interrupt handler is in the device driver - kernel code that manages the device
+  - interrupts are handled in a special context called interrupt context
+  - interrupts are to be responded to quickly and then handler should execute the fn quickly
+- Top halves vs Bottom halves
+  - conflicting needs - execute quickly vs large amount of work to be done (e.g. handling n/w traffic, copying bytes from n/w card)
+  - interrupt processing is split into 2 halves
+    - top half ack recipet
+    - heavy work is deferred to bottom half
+    - n/w example; on interrupt kernel copies packets from n/w card into main memory and acks; actual processing of the n/w packets happen later
+- Registering an interrupt handler
+  - responsibility of the device drive to register the device's interrupt handler
+  - request_irq(irq, handler, flags, ...)
+  - flags
+    - IRQF_DISABLED - disable all interrupts when exexecuting this handler. usually only used for performance sensitive inter
+    - IRQF_SAMPLE_RANDOM - contribute to entropy pool - to generate truly random numbers
+    - IRQF_TIMER - processes interrupts for system timer
+    - IRQF_SHARED - interrupt line can be shared by multiple interrupt handlers
+  - free_irq() - unregister the interrupt handler 
+- Writing an interrupt handler
+  - fn to handle the interrupt
+  - interrupt need not be reentrant. when an interrupt handler is executed, corresponding interrupt line is masked on all processors; interrupt handler never invoked concurrently
+  - all other interrupts are enabled, but current line is always disabled; 
+  - example : real life interrupt handler
+- Interrupt Context
+- Implementing interrupt handlers
+  - interrupt path from hardware to kernel
+- /proc/interrupts
+- Interrupt Control 
+  - linux provides interfaces for manipulating state of interrupts on a machine
+    - linux provides interfaces for manipulating state of interrupts on a machine
+    - can disable interrupts / mask out an interrupt line
+
+### Bottom Halves and Deferring Work
+- Bottom halves
+  - perform any interrupt related work not performed by interrupt handler in top half
+  - critieria to decide where to run - top vs bottom
+    - top half
+      - time sensitive
+      - h/w related
+      - needs to ensure another interrupt does not interrupt it ???
+    - everything else can be bottom half
+    - no hard rules though
+- why use bottom halves
+  - interrupt handler disables current interrupt line on the processor
+  - handlers with IRQF_DISABLED disables all interrupt lines on current processor and current interrupt line on all processors
+  - e.g "processing incoming n/w traffic should not prevent kernel's receipt of key-strokes"
+- how are bottom halves implemented  
+  - original 
+    - globally synchronized 32 bit interger  for 32 possible tasks?
+  - task queues
+  - softirqs and tasklets (currently available)
+  - work queues (currently available)
+...
+
+### Kernel Synchronization
+- Critical regions and race conditions
+  - context
+    - code paths that access and manipulate shared data = critical region
+    - critical region must execute "atomically"
+    - if 2 threads execute the critical region simulataneously, possible race condition
+    - preventing this = synchronization
+    - classic bank balance example
+  - single variable
+    - i++; multiple machine instructions problem
+    - processor supply an atomic increment and store instruction to prevent this
+- Locking
+  - processors cannot provide atomic instructions for all complex mechanisms
+  - "a mechanism for preventing access to a resource while another thread of execution is in the marked region" - locking
+  - threads hold locks; locks protect data
+  - locks prevent concurrency and thus prevent race conditions
+  - locks are advisory and voluntary
+  - getting a lock is atomic - test and set instruction
+  - causes of concurrency
+    - pseudo concurrency because of interleaving processes scheduled by the kernel vs true concurrency in a symmetrical mulitprocessing machine
+    - interrupt-safe
+    - SMP-safe
+    - prempt-safe
+  - knowing what to protect
+    - stack data is safe
+    - "if anyone else can see it, lock it"
+- Deadlocks
+  - difficult to prove code is free of deadlocks, but it is possible to write deadlock free code
+  - guidelines
+    - lock ordering. nested locks must always be obtained in the same order
+      - e.g. 3 locks cat, dog, fox guarding data strcutures with the same names
+      - if you want to acquire locks on all the 3 data strcutures, all functions should do that in the same order
+    - prevent starvation. "if foo does not occur, will bar wait forever?"
+    - don't double acquire same lock
+    - design for simplicity
+- contention and scalability
+  - lock contention - a lock is use, but for which another thread is waiting
+  - locks serailize access to a resource; thus results in slow down of performance
+  - scalability = how well can a system be expanded
+  - coarse locks vs fine locks
+  - "There is a thin line between too-coarse locking and too-fine locking.  Locking that is too coarse results in poor scalability if there is high lock contention, whereas locking that is too fine results in wasteful overhead if there is little lock contention"
