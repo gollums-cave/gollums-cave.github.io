@@ -1,1 +1,4 @@
-i found a ring today!
+- i found a ring today!
+- years go by
+- a thief stole it from me!!
+- 
