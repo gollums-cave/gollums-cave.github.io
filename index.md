@@ -7,3 +7,4 @@ title: Home
 
 ### Random
 - [scribblings](public/scribblings.md)
+- [streaks](public/streaks.md)
