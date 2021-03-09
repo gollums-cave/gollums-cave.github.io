@@ -62,3 +62,23 @@ Lisp
         )
       ```
 
+Procedures and Processes; Substitution Model
+
+```
+(define (sos x y)
+  (+ (sq x) (sq y))
+(define (sq x)
+  (* x x))
+```
+
+- Kinds of expressions
+  - numbers
+  - symbols
+  - lambda expressions
+  - definitions
+  - conditionals
+  - combinations
+- Substitution Rule
+  
+
+```
