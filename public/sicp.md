@@ -79,6 +79,14 @@ Procedures and Processes; Substitution Model
   - conditionals
   - combinations
 - Substitution Rule
-  
+  - can be used to solve these expressions  
+  - combinations
+    - eval operator as procedure, then eval operands as arguments, apply
+      arguments to the procedure. 
+  - conditionals; if <predicate> then <consequent> else <alternative>
 
-```
+- 2 kinds of evaluation 
+  - peano arthimetic to add 2 numbers
+  - both are recursive definitions, but results in iterative vs recursive
+    processes
+
