@@ -8,3 +8,5 @@ March 21
 | Mar 4  |  X   | X        | X          |      |
 | Mar 5  |  X   | X        | X          | X    |
 | Mar 6  |  X   | X        | X          | X    |
+| Mar 7  |      | X        | X          | X    |
+| Mar 8  |  X   | X        | X          | X    |
