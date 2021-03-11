@@ -89,4 +89,16 @@ Procedures and Processes; Substitution Model
   - peano arthimetic to add 2 numbers
   - both are recursive definitions, but results in iterative vs recursive
     processes
+  - diff b/w iterative vs recursive
+    - bureaucracy
+    - recursive - have to carry state
+
+- fibonacci example
+ ```
+ (define (fib n) 
+    (if (< n 2)
+      n
+      (+ (fib (- n 1))
+         (fib (- n 2)))))
+ ```
 
