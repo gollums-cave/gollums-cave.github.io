@@ -102,3 +102,12 @@ Procedures and Processes; Substitution Model
          (fib (- n 2)))))
  ```
 
+Higher Order Procedures
+  - procedures as arguments
+
+Rights and privileges of first class citizens
+- to be named as variables
+- to be passed as arguments to procedures
+- to be returned as values of procedures
+- to be incorporated into data structures
+
